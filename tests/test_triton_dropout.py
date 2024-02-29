@@ -8,12 +8,13 @@ import logging
 
 import pytest
 import torch
-from torch.cuda.amp.autocast_mode import autocast
+from torch.cpu.amp.autocast_mode import autocast
 
 import xformers
 from xformers.components import Activation, build_activation
 
-_gpu_available = torch.cuda.is_available()
+#_gpu_available = torch.cuda.is_available()
+_gpu_available = True
 _triton_available = xformers._is_triton_available()
 
 if _triton_available:
@@ -22,6 +23,12 @@ if _triton_available:
 
         from xformers.triton import dropout as triton_dropout
         from xformers.triton.dropout import FusedDropoutBias
+
+        import triton
+        from triton.backends.triton_shared.driver import CPUDriver
+        import triton.language as tl
+
+        triton.runtime.driver.set_active(CPUDriver())
 
         _triton_available = True
     except ImportError:
@@ -70,11 +77,11 @@ def test_dropout(shape, amp, bias, p):
     Check some basic dropout properties
     """
     torch.random.manual_seed(0)
-    torch.cuda.manual_seed_all(0)
+    torch.manual_seed_all(0)
 
-    x = torch.normal(0, 1, size=shape, device="cuda", requires_grad=True)
+    x = torch.normal(0, 1, size=shape, device="cpu", requires_grad=True)
     b = (
-        torch.normal(0, 1, size=(shape[-1],), device="cuda", requires_grad=True)
+        torch.normal(0, 1, size=(shape[-1],), device="cpu", requires_grad=True)
         if bias
         else None
     )
@@ -122,11 +129,11 @@ def test_dropout(shape, amp, bias, p):
 
         # Check that the same seeds lead to the same dropout
         torch.manual_seed(0)
-        torch.cuda.manual_seed(0)
+        torch.cpu.manual_seed(0)
         y_1 = triton_dropout(x, p=0.5)
 
         torch.manual_seed(0)
-        torch.cuda.manual_seed(0)
+        torch.cpu.manual_seed(0)
         y_2 = triton_dropout(x, p=0.5)
 
         torch.testing.assert_close(y_1, y_2)
@@ -145,17 +152,17 @@ def test_dropout_parity(shape, amp, bias, activation, p):
     """
 
     torch.random.manual_seed(0)
-    x = torch.normal(0, 1, size=shape, device="cuda", requires_grad=True)
+    x = torch.normal(0, 1, size=shape, device="cpu", requires_grad=True)
     b = (
-        torch.ones(size=(shape[-1],), device="cuda", requires_grad=True)
+        torch.ones(size=(shape[-1],), device="cpu", requires_grad=True)
         if bias
         else None
     )
 
     torch.random.manual_seed(0)
-    x_ = torch.normal(0, 1, size=shape, device="cuda", requires_grad=True)
+    x_ = torch.normal(0, 1, size=shape, device="cpu", requires_grad=True)
     b_ = (
-        torch.ones(size=(shape[-1],), device="cuda", requires_grad=True)
+        torch.ones(size=(shape[-1],), device="cpu", requires_grad=True)
         if bias
         else None
     )

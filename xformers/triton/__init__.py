@@ -6,7 +6,8 @@
 
 import torch
 
-_triton_available = torch.cuda.is_available()
+#_triton_available = torch.cuda.is_available()
+_triton_available = True
 if _triton_available:
     try:
         from .dropout import FusedDropoutBias, dropout  # noqa

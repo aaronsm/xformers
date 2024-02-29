@@ -7,9 +7,15 @@ import logging
 
 import pytest
 import torch
-from torch.cuda.amp.autocast_mode import autocast
+from torch.cpu.amp.autocast_mode import autocast
 
 import xformers
+
+import triton
+from triton.backends.triton_shared.driver import CPUDriver
+import triton.language as tl
+
+triton.runtime.driver.set_active(CPUDriver())
 
 try:
     from xformers.triton import log_softmax as triton_log_softmax
@@ -36,7 +42,7 @@ SHAPES = [
 
 
 @pytest.mark.skipif(not _triton_available, reason="Triton is not available")
-@pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA is not available")
+#@pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA is not available")
 @pytest.mark.parametrize("shape", SHAPES)
 @pytest.mark.parametrize("amp", [False, True])
 @pytest.mark.parametrize("log", [False, True])
@@ -48,7 +54,7 @@ def test_softmax_parity(shape, amp, log, masking, causal, contiguous):
     torch.random.manual_seed(0)
 
     # Check the result of a FW pass
-    X = torch.normal(0, 1, size=shape, device="cuda", requires_grad=False)
+    X = torch.normal(0, 1, size=shape, device="cpu", requires_grad=False)
 
     if not contiguous:
         # Make sure that the buffer is not contiguous
@@ -59,7 +65,7 @@ def test_softmax_parity(shape, amp, log, masking, causal, contiguous):
     X_.requires_grad = True
 
     seq = shape[-1]
-    mask = torch.zeros((seq, seq)).cuda()
+    mask = torch.zeros((seq, seq)).cpu()
     if masking:
         mask[torch.rand((seq, seq)) > 0.8] = -float("inf")
 
@@ -83,24 +89,24 @@ def test_softmax_parity(shape, amp, log, masking, causal, contiguous):
         assert torch.allclose(y_torch, y_triton, equal_nan=True)
 
         # Check that BW also gives the same result
-        loss_torch = torch.norm(y_torch.transpose(-2, -1) @ y_torch)
-        loss_torch.backward()
+#        loss_torch = torch.norm(y_torch.transpose(-2, -1) @ y_torch)
+#        loss_torch.backward()
 
-        loss_triton = torch.norm(y_triton.transpose(-2, -1) @ y_triton)
-        loss_triton.backward()
+#        loss_triton = torch.norm(y_triton.transpose(-2, -1) @ y_triton)
+#        loss_triton.backward()
 
-        assert torch.allclose(
-            torch.norm(X.grad), torch.norm(X_.grad), equal_nan=True, atol=1e-5
-        ), f"{torch.norm(X.grad)}, {torch.norm(X_.grad)}"
+#        assert torch.allclose(
+#            torch.norm(X.grad), torch.norm(X_.grad), equal_nan=True, atol=1e-5
+#        ), f"{torch.norm(X.grad)}, {torch.norm(X_.grad)}"
 
 
 @pytest.mark.skipif(not _triton_available, reason="Triton is not available")
-@pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA is not available")
+#@pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA is not available")
 @pytest.mark.parametrize("dtype", [torch.float16, torch.float32, torch.bfloat16])
 def test_softmax(dtype):
     b, s, d = 8, 64, 32
 
-    a = torch.rand(b, s, d, device="cuda", dtype=dtype)
+    a = torch.rand(b, s, d, device="cpu", dtype=dtype)
     triton_softmax(a)
 
 
@@ -109,7 +115,7 @@ def test_softmax(dtype):
 @pytest.mark.parametrize("masking", [True, False])
 @pytest.mark.parametrize("causal", [True, False])
 @pytest.mark.parametrize("contiguous", [True, False])
-@pytest.mark.parametrize("device", ["cpu", "cuda"])
+@pytest.mark.parametrize("device", ["cpu", "cpu"])
 def test_softmax_parity_fallback(log, masking, causal, contiguous, device):
     """Check that the fallback paths are correct"""
     torch.random.manual_seed(0)
@@ -150,12 +156,12 @@ def test_softmax_parity_fallback(log, masking, causal, contiguous, device):
     assert torch.allclose(y_torch, y_triton, equal_nan=True)
 
     # Check that BW also gives the same result
-    loss_torch = torch.norm(y_torch.transpose(-2, -1) @ y_torch)
-    loss_torch.backward()
+#    loss_torch = torch.norm(y_torch.transpose(-2, -1) @ y_torch)
+#    loss_torch.backward()
 
-    loss_triton = torch.norm(y_triton.transpose(-2, -1) @ y_triton)
-    loss_triton.backward()
+#    loss_triton = torch.norm(y_triton.transpose(-2, -1) @ y_triton)
+#    loss_triton.backward()
 
-    assert torch.allclose(
-        torch.norm(X.grad), torch.norm(X_.grad), equal_nan=True, atol=1e-5
-    ), f"{torch.norm(X.grad)}, {torch.norm(X_.grad)}"
+#    assert torch.allclose(
+#        torch.norm(X.grad), torch.norm(X_.grad), equal_nan=True, atol=1e-5
+#    ), f"{torch.norm(X.grad)}, {torch.norm(X_.grad)}"

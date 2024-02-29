@@ -13,10 +13,12 @@ import xformers
 
 try:
     import triton
+    from triton.backends.triton_shared.driver import CPUDriver
     import triton.language as tl
 
     from xformers.triton.vararg_kernel import unroll_varargs
 
+    triton.runtime.driver.set_active(CPUDriver())
     _triton_available = xformers._is_triton_available()
 except ImportError as e:
     logging.warning(
@@ -27,7 +29,7 @@ except ImportError as e:
 enable_tests = (
     (sys.version_info.major, sys.version_info.minor) >= (3, 9)
     and _triton_available
-    and torch.cuda.is_available()
+    #and torch.cuda.is_available()
 )
 
 
@@ -50,11 +52,11 @@ def test_triton_varargs_kernel():
     NUM_INPUTS = 2
     torch.manual_seed(0)
     inputs = [
-        torch.randn([BLOCK_SIZE], dtype=torch.float32, device="cuda")
+        torch.randn([BLOCK_SIZE], dtype=torch.float32, device="cpu")
         for _ in range(NUM_INPUTS)
     ]
-    output = torch.randn([BLOCK_SIZE], dtype=torch.float32, device="cuda")
-    scaling = torch.randn([NUM_INPUTS, 1], dtype=torch.float32, device="cuda")
+    output = torch.randn([BLOCK_SIZE], dtype=torch.float32, device="cpu")
+    scaling = torch.randn([NUM_INPUTS, 1], dtype=torch.float32, device="cpu")
     sumN_unrolled = unroll_varargs(sumN, N=NUM_INPUTS)
     sumN_unrolled[(1,)](output, scaling, *inputs, BLOCK_SIZE=32)
     assert torch.allclose((2 * torch.stack(inputs) * scaling).sum(0), output)
@@ -81,12 +83,12 @@ def test_triton_multiple_varargs_kernel():
     NUM_INPUTS = 2
     torch.manual_seed(0)
     a = [
-        torch.randn([BLOCK_SIZE], dtype=torch.float32, device="cuda")
+        torch.randn([BLOCK_SIZE], dtype=torch.float32, device="cpu")
         for _ in range(NUM_INPUTS)
     ]
-    b = [torch.randn([], dtype=torch.float32, device="cuda") for _ in range(NUM_INPUTS)]
+    b = [torch.randn([], dtype=torch.float32, device="cpu") for _ in range(NUM_INPUTS)]
     b_list = [x.item() for x in b]
-    output = torch.randn([BLOCK_SIZE], dtype=torch.float32, device="cuda")
+    output = torch.randn([BLOCK_SIZE], dtype=torch.float32, device="cpu")
     kernel = unroll_varargs(weighted_sumN, N=NUM_INPUTS)
     kernel[(1,)](output, *a, *b_list, BLOCK_SIZE=32)
     expected_output = (torch.stack(a) * torch.stack(b).unsqueeze(1)).sum(0)
