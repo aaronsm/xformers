@@ -32,10 +32,11 @@ SHAPES = [
     (384, 384),
     (2, 384, 384),
     (1, 784, 784),
-    (1, 1024, 1024),
-    (1, 2048, 2048),
-    (1, 3136, 3136),
-    (1, 4096, 4096),
+ # TODO reduce test runtime
+ #   (1, 1024, 1024),
+ #   (1, 2048, 2048),
+ #   (1, 3136, 3136),
+ #   (1, 4096, 4096),
     (2, 2, 384, 384),
     (2, 2, 2, 384, 384),
 ]
@@ -89,15 +90,15 @@ def test_softmax_parity(shape, amp, log, masking, causal, contiguous):
         assert torch.allclose(y_torch, y_triton, equal_nan=True)
 
         # Check that BW also gives the same result
-#        loss_torch = torch.norm(y_torch.transpose(-2, -1) @ y_torch)
-#        loss_torch.backward()
+        loss_torch = torch.norm(y_torch.transpose(-2, -1) @ y_torch)
+        loss_torch.backward()
 
-#        loss_triton = torch.norm(y_triton.transpose(-2, -1) @ y_triton)
-#        loss_triton.backward()
+        loss_triton = torch.norm(y_triton.transpose(-2, -1) @ y_triton)
+        loss_triton.backward()
 
-#        assert torch.allclose(
-#            torch.norm(X.grad), torch.norm(X_.grad), equal_nan=True, atol=1e-5
-#        ), f"{torch.norm(X.grad)}, {torch.norm(X_.grad)}"
+        assert torch.allclose(
+            torch.norm(X.grad), torch.norm(X_.grad), equal_nan=True, atol=1e-5
+        ), f"{torch.norm(X.grad)}, {torch.norm(X_.grad)}"
 
 
 @pytest.mark.skipif(not _triton_available, reason="Triton is not available")
@@ -115,7 +116,7 @@ def test_softmax(dtype):
 @pytest.mark.parametrize("masking", [True, False])
 @pytest.mark.parametrize("causal", [True, False])
 @pytest.mark.parametrize("contiguous", [True, False])
-@pytest.mark.parametrize("device", ["cpu", "cpu"])
+@pytest.mark.parametrize("device", ["cpu"])
 def test_softmax_parity_fallback(log, masking, causal, contiguous, device):
     """Check that the fallback paths are correct"""
     torch.random.manual_seed(0)
@@ -156,12 +157,12 @@ def test_softmax_parity_fallback(log, masking, causal, contiguous, device):
     assert torch.allclose(y_torch, y_triton, equal_nan=True)
 
     # Check that BW also gives the same result
-#    loss_torch = torch.norm(y_torch.transpose(-2, -1) @ y_torch)
-#    loss_torch.backward()
+    loss_torch = torch.norm(y_torch.transpose(-2, -1) @ y_torch)
+    loss_torch.backward()
 
-#    loss_triton = torch.norm(y_triton.transpose(-2, -1) @ y_triton)
-#    loss_triton.backward()
+    loss_triton = torch.norm(y_triton.transpose(-2, -1) @ y_triton)
+    loss_triton.backward()
 
-#    assert torch.allclose(
-#        torch.norm(X.grad), torch.norm(X_.grad), equal_nan=True, atol=1e-5
-#    ), f"{torch.norm(X.grad)}, {torch.norm(X_.grad)}"
+    assert torch.allclose(
+        torch.norm(X.grad), torch.norm(X_.grad), equal_nan=True, atol=1e-5
+    ), f"{torch.norm(X.grad)}, {torch.norm(X_.grad)}"

@@ -20,13 +20,11 @@ _triton_available = xformers._is_triton_available()
 if _triton_available:
     try:
         import triton  # noqa: F401
+        from triton.backends.triton_shared.driver import CPUDriver
+        import triton.language as tl
 
         from xformers.triton import dropout as triton_dropout
         from xformers.triton.dropout import FusedDropoutBias
-
-        import triton
-        from triton.backends.triton_shared.driver import CPUDriver
-        import triton.language as tl
 
         triton.runtime.driver.set_active(CPUDriver())
 

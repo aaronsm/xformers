@@ -8,12 +8,18 @@ import logging
 
 import pytest
 import torch
-from torch.cuda.amp.autocast_mode import autocast
+from torch.cpu.amp.autocast_mode import autocast
 
 import xformers
 
 try:
     from xformers.triton import FusedLayerNorm
+
+    import triton  # noqa: F401
+    from triton.backends.triton_shared.driver import CPUDriver
+    import triton.language as tl
+    
+    triton.runtime.driver.set_active(CPUDriver())
 
     _triton_available = xformers._is_triton_available()
 except ImportError:
@@ -41,17 +47,17 @@ def test_layernorm_parity(shape, amp):
     """Check that PyTorch and Triton softmax give the same result"""
 
     # Get the same inputs
-    torch.random.manual_seed(0)
-    X = torch.normal(0, 1, size=shape, device="cuda", requires_grad=True)
+    torch.manual_seed(0)
+    X = torch.normal(0, 1, size=shape, device="cpu", requires_grad=True)
 
-    torch.random.manual_seed(0)
-    X_ = torch.normal(0, 1, size=shape, device="cuda", requires_grad=True)
+    torch.manual_seed(0)
+    X_ = torch.normal(0, 1, size=shape, device="cpu", requires_grad=True)
 
     eps = 1e-4
 
     # Initialize the two layers, weights are 1 and 0 by default, no randomness
-    torch_layernorm = torch.nn.LayerNorm(X.shape[-1], eps=eps).to("cuda")
-    triton_layernorm = FusedLayerNorm(X.shape[-1], affine=True, eps=eps).to("cuda")
+    torch_layernorm = torch.nn.LayerNorm(X.shape[-1], eps=eps).to("cpu")
+    triton_layernorm = FusedLayerNorm(X.shape[-1], affine=True, eps=eps).to("cpu")
 
     with autocast(enabled=amp):
         assert torch.allclose(X, X_)  # sanity checking, else all hell breaks loose
@@ -99,19 +105,20 @@ def test_layernorm_parity(shape, amp):
 
 
 @pytest.mark.skipif(not _triton_available, reason="Triton is not available")
-@pytest.mark.parametrize("dtype", [torch.float16, torch.float32, torch.bfloat16])
+# TODO no support on CPU for float16
+#@pytest.mark.parametrize("dtype", [torch.float16, torch.float32, torch.bfloat16])
+@pytest.mark.parametrize("dtype", [torch.float32, torch.bfloat16])
 def test_no_contiguous(dtype):
     """Check that we don't choke on non-contigous tensors"""
     shape = (8, 384, 128)
 
     # Get the same inputs
-    torch.random.manual_seed(0)
-    torch.cuda.manual_seed(0)
+    torch.manual_seed(0)
 
-    X = torch.normal(0, 1, size=shape, device="cuda", requires_grad=True, dtype=dtype)
+    X = torch.normal(0, 1, size=shape, device="cpu", requires_grad=True, dtype=dtype)
     X = X.transpose(2, 1).contiguous().transpose(2, 1)
 
     assert not X.is_contiguous()
 
-    triton_layernorm = FusedLayerNorm(X.shape[-1]).to(device="cuda", dtype=dtype)
+    triton_layernorm = FusedLayerNorm(X.shape[-1]).to(device="cpu", dtype=dtype)
     _ = triton_layernorm(X)

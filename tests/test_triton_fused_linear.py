@@ -16,10 +16,14 @@ _triton_available = xformers._is_triton_available()
 if _triton_available:
     try:
         import triton  # noqa: F401
+        from triton.backends.triton_shared.driver import CPUDriver
+        import triton.language as tl
 
         from xformers.triton import FusedLinear
         from xformers.triton.k_activations import get_triton_activation_index
         from xformers.triton.k_fused_matmul_fw import fused_matmul
+
+        triton.runtime.driver.set_active(CPUDriver())
 
     except ImportError:
         logging.warning(
